@@ -1,7 +1,9 @@
-# from turtle import width
+from sys import flags
 import numpy as np
 import time
 import functools
+import pygame as pg
+from pygame import surfarray
 
 
 def timeit(f):
@@ -27,7 +29,7 @@ class Field:
 
     def __init__(self, width: int, height: int) -> None:
         self.size = width, height
-        self.array = np.zeros(self.size, dtype=np.bool_)
+        self.array = np.zeros(self.size)#, dtype=np.int8)
         self.to_update = {(x, y) for x in range(width) for y in range(height)}
     
     def add_life(self) -> None:
@@ -38,6 +40,10 @@ class Field:
             ]).transpose()
         o_w, o_h = [i//2 for i in self.size]
         self.array[o_w:o_w+3, o_h:o_h+3] = life
+    
+    def to_image(self):
+        image = self.array.copy() *-1
+        return image
     
     @timeit
     def __str__(self):
@@ -76,26 +82,50 @@ class Field:
         return len(cells_to_change)
 
 
+class Display:
+
+    def __init__(self, width: int, height: int) -> None:
+        self.size = width, height
+        flags = pg.SCALED | pg.RESIZABLE
+        self.screen = pg.display.set_mode(self.size, flags=flags, depth=1)
+        pg.display.set_caption('name')
+    
+    @timeit
+    def draw(self, field: Field) -> None:
+        array_img = field.to_image()
+        surfarray.blit_array(self.screen, array_img)
+        pg.display.flip()
 
 
 def main():
-    size = width, height = 128, 16
+    size = width, height = 1920//2, 1080//2
+    # size = width, height = 1920//1, 1080//1
     some_field = Field(*size)
     some_field.add_life()
-    target_fps = 10
+    
+    pg.init()
+    disp = Display(*size)
+    fps = 120
 
+    stop = time.time()
     while True:
-        now = time.time()
-        output = str(some_field)
+        start = time.time()
+
+        disp.draw(some_field)
         updated = some_field.life_step()
-        d_time = some_field.__str__.__elapsed__
+
+
+        d_time = disp.draw.__elapsed__
         u_time = some_field.life_step.__elapsed__
-        output += f'drawing time: {d_time}\n'
+
+        output = f'drawing time: {d_time}\n'
         output += f'updating time: {u_time}\tper cel time: {u_time/updated}\n'
 
-        output += f'fps: {1 / (time.time() - now)}'
+        output += f'fps: {1 / (time.time() - stop)}\n'
         print(output)
-        time.sleep(0.1)
+        stop = time.time()
+        time.sleep(max(1/fps - (time.time() - start), 0))
+
 
 if __name__ == "__main__":
     main()
