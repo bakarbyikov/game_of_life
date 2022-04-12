@@ -8,6 +8,7 @@ authors = ["Andrey <Bakarbyikov@gmail.com>"]
 python = "^3.10"
 numpy = "^1.22.3"
 pygame = "^2.1.2"
+loguru = "^0.6.0"
 
 [tool.poetry.dev-dependencies]
 

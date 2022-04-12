@@ -1,131 +1,176 @@
-from sys import flags
-import numpy as np
-import time
 import functools
 import pygame as pg
-from pygame import surfarray
+from loguru import logger
+from typing import Tuple
+import time
+pg.init()
+
+from field import Field
+from tools import *
+
+class Widget:
+    def __init__(
+            self, 
+            pos: Tuple[int, int], 
+            size: Tuple[int, int],
+        ) -> None:
+        raise NotImplementedError
+    def to_draw(self):
+        raise NotImplementedError
 
 
-def timeit(f):
-    @functools.wraps(f)
-    def inner(*args, **kwargs):
-        start = time.perf_counter()
-        ret = f(*args, **kwargs)
-        elapsed = time.perf_counter() - start
+class Field_windget:
 
-        inner.__elapsed__ = elapsed
-        # inner.__total_time__ += elapsed
-        # inner.__n_calls__ += 1
-
-        return ret
-
-
-    inner.__elapsed__ = 0
-    # inner.__total_time__ = 0
-    # inner.__n_calls__ = 0
-    return inner
-
-class Field:
-
-    def __init__(self, width: int, height: int) -> None:
-        self.size = width, height
-        self.array = np.zeros(self.size)#, dtype=np.int8)
-        self.to_update = {(x, y) for x in range(width) for y in range(height)}
+    def __init__(
+            self, 
+            pos: Tuple[int, int], 
+            size: Tuple[int, int], 
+            field: Field,
+        ) -> None:
+        self.pos = pos
+        self.size = size
+        self.field = field
     
-    def add_life(self) -> None:
-        life = np.array([
-            [0, 1, 0],
-            [1, 1, 0],
-            [0, 1, 1],
-            ]).transpose()
-        o_w, o_h = [i//2 for i in self.size]
-        self.array[o_w:o_w+3, o_h:o_h+3] = life
-    
-    def to_image(self):
-        image = self.array.copy() *-1
-        return image
-    
-    @timeit
-    def __str__(self):
-        symbols = {0: '_', 1: '#'}
-        rows = list()
-        for row in self.array.transpose()[:,:]:
-            row_s = ''.join(map(symbols.get, row))
-            rows.append(row_s)
-        return '\n'.join(rows)+'\n'
-    
-    @timeit
-    def life_step(self) -> None:
-        cells_to_change = list()
-        width, height = self.size
-        for x, y in self.to_update:
-            alive = self.array[x, y]
-            n = self.array[x-1:x+2, y-1:y+2].sum() - alive
-            # alive = n == 3  or (n == 4 and self.array[x, y])
-            if alive:
-                changed = n > 3 or n < 2
-            else:
-                changed = n == 3
-            if changed:
-                cells_to_change.append((x, y))
-        self.to_update.clear()
-        
-        for x, y in cells_to_change:
-            self.array[x, y] = not self.array[x, y]
-            for n_x in range(x-1, x+2):
-                if n_x < 0 or n_x >= width:
-                    continue
-                for n_y in range(y-1, y+2):
-                    if n_y < 0 or n_y >= height:
-                        continue
-                    self.to_update.add((n_x, n_y))
-        return len(cells_to_change)
+    def to_draw(self):
+        array_img = self.field.to_image((0, 0), (-1, -1))
+        surf = pg.surfarray.make_surface(array_img)
+        surf.set_palette_at(1, pg.Color('white'))
+        scale = min([i/j for i, j in zip(self.size, array_img.shape)])
+        new_size = [i * scale for i in array_img.shape]
+        resized = pg.transform.scale(surf, new_size)
+        return resized
 
 
-class Display:
+class Camera:
 
-    def __init__(self, width: int, height: int) -> None:
-        self.size = width, height
-        flags = pg.SCALED | pg.RESIZABLE
-        self.screen = pg.display.set_mode(self.size, flags=flags, depth=1)
-        pg.display.set_caption('name')
+    def __init__(self, pos: Tuple[int, int], size: Tuple[int, int]) -> None:
+        self.pos = pos
+        self.size = size
+
+
+class Display():
+
+    def __init__(
+        self,
+        size: Tuple[int, int] = (0, 0),
+        flags: int = 0,
+    ) -> None:
+        self.size = w, h = size
+        self.flags = 0#pg.RESIZABLE
+        self.surface = pg.display.set_mode(self.size, self.flags)
+        self.last_update = now()
+        self.widgets = list()
     
-    @timeit
-    def draw(self, field: Field) -> None:
-        array_img = field.to_image()
-        surfarray.blit_array(self.screen, array_img)
+
+    def add_widget(self, widget: Widget):
+        self.widgets.append(widget)
+    
+
+    def update(self):
+        # if self.size != pg.display.get_window_size():
+        #     self.resize()
+        #     self.update_surface()
+        self.draw()
+        try:
+            fps = 1 / (now() - self.last_update)
+        except ZeroDivisionError:
+            fps = float('inf')
+        if fps < 30:
+            logger.warning(f"low fps~{fps:0.2f}")
+        self.set_caption(f'fps:{fps:0.2f}')
+        self.last_update = now()
+    
+
+    # def resize():
+    #     pass
+    
+
+    # def update_surface(self):
+    #     self.size = pg.display.get_window_size()
+    #     self.surface = pg.display.get_surface()
+
+    
+    def draw(self):
+        color = int(now()) % (256**3)
+        self.surface.fill(color)
+        for w in self.widgets:
+            s = w.to_draw()
+            self.surface.blit(s, (0, 0))
         pg.display.flip()
 
 
-def main():
-    size = width, height = 1920//2, 1080//2
-    # size = width, height = 1920//1, 1080//1
-    some_field = Field(*size)
-    some_field.add_life()
+    @not_so_fast()
+    def set_caption(self, caption: str) -> None:
+        pg.display.set_caption(caption)
     
-    pg.init()
-    disp = Display(*size)
-    fps = 120
-
-    stop = time.time()
-    while True:
-        start = time.time()
-
-        disp.draw(some_field)
-        updated = some_field.life_step()
 
 
-        d_time = disp.draw.__elapsed__
-        u_time = some_field.life_step.__elapsed__
+    
 
-        output = f'drawing time: {d_time}\n'
-        output += f'updating time: {u_time}\tper cel time: {u_time/updated}\n'
+class Game:
+    field_size = 100, 100
 
-        output += f'fps: {1 / (time.time() - stop)}\n'
-        print(output)
-        stop = time.time()
-        time.sleep(max(1/fps - (time.time() - start), 0))
+    def __init__(self, display: Display) -> None:
+        self.field = Field(*self.field_size)
+        self.display = display
+        self.field_widget = Field_windget((0, 0), self.display.size, self.field)
+        self.display.add_widget(self.field_widget)
+    
+    @not_so_fast()
+    def update(self):
+        self.field.life_step()
+    
+
+        
 
 
-if __name__ == "__main__":
+
+class App:
+    window_size = 1920//2, 1080//2
+
+    class Exit(BaseException):
+        pass
+
+    def __init__(self) -> None:
+        self.screen = Display(self.window_size)
+        self.game = Game(self.screen)
+        self.clock = pg.time.Clock()
+        try:
+            self.mainloop()
+        except self.Exit:
+            pass
+
+    
+    def mainloop(self) -> None:
+        while True:
+            self.handle_events()
+            self.screen.update()
+            self.game.update()
+            self.clock.tick(60)
+
+    
+    def handle_events(self) -> None:
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                self.quit()
+            if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
+                self.quit()
+            elif event.type == pg.KEYDOWN:
+                if event.key == pg.K_f:
+                    self.toggle_fullscreen()
+    
+
+    def toggle_fullscreen(self) -> None:
+        #TODO
+        pass
+    
+    def quit(self) -> None:
+        raise self.Exit
+
+@logger.catch
+def main():
+    app = App()
+    
+
+if __name__ == '__main__':
     main()
