@@ -1,18 +1,23 @@
-import asyncio
 import numpy as np
-from typing import Tuple
+from typing import Tuple, NamedTuple
 from loguru import logger
 import time
+from itertools import product
 
 from tools import timeit
+
+class Cell(NamedTuple):
+    x: int
+    y: int
 
 class Field:
 
     def __init__(self, width: int, height: int) -> None:
         self.size = width, height
         self.array = np.zeros(self.size, dtype=np.ubyte)
-        self.to_update = {(x, y) for x in range(width) for y in range(height)}
+        self.to_update = {Cell(x, y) for x, y  in product(range(width), range(height))}
         self.add_life()
+    
     
     def add_life(self) -> None:
         life = np.array([
@@ -20,16 +25,17 @@ class Field:
             [1, 1, 0],
             [0, 1, 1],
             ]).transpose()
-        o_w, o_h = [i//2 for i in self.size]
+        o_w, o_h = (i//2 for i in self.size)
         self.array[o_w-3:o_w, o_h-3:o_h] = life
-    
+
+
     @timeit
-    def to_image(self, offset: Tuple[int, int], size: Tuple[int, int]) -> np.array:
+    def to_image(self, offset: Tuple[int, int], size: Tuple[int, int]) -> np.ndarray:
         o_x, o_y = offset
         s_x, s_y = size
-        image = self.array[o_x:o_x+s_x, o_y:o_y+s_y]
-        return image
+        return self.array[o_x:o_x+s_x, o_y:o_y+s_y]
     
+
     @timeit
     def __str__(self) -> None:
         symbols = {0: '_', 1: '#'}
@@ -39,32 +45,45 @@ class Field:
             rows.append(row_s)
         return '\n'.join(rows)+'\n'
     
+
+    def is_cell_need_change(self, cell: Cell) -> bool:
+        x, y = cell
+        alive = self.array[x, y]
+        neighbor_count = self.array[x-1:x+2, y-1:y+2].sum() - alive 
+        if alive:
+            #dead condition
+            changed = neighbor_count > 3 or neighbor_count < 2
+        else:
+            #alive condition
+            changed = neighbor_count == 3
+        
+        return changed
+    
+    
+    def is_inbound(self, cell: Cell):
+        for component, top_bound in zip(cell, self.size):
+            if component >= top_bound:
+                return False
+            if component < 0:
+                return False
+        return True
+
+
+    def add_to_update(self, cell: Cell):
+        for o_x, o_y in product(range(-1, 2), repeat=2):
+            neighbor = Cell(cell.x+o_x, cell.y+o_y)
+            if self.is_inbound(neighbor):
+                self.to_update.add(neighbor)
+
+
     @timeit
     def life_step(self) -> None:
-        # logger.debug('life step')
-        cells_to_change = list()
-        width, height = self.size
-        for x, y in self.to_update:
-            alive = self.array[x, y]
-            n = self.array[x-1:x+2, y-1:y+2].sum() - alive
-            if alive:
-                changed = n > 3 or n < 2
-            else:
-                changed = n == 3
-            if changed:
-                cells_to_change.append((x, y))
+        cells_to_change = tuple(filter(self.is_cell_need_change, self.to_update))
         self.to_update.clear()
         
-        for x, y in cells_to_change:
-            self.array[x, y] = not self.array[x, y]
-            for n_x in range(x-1, x+2):
-                if n_x < 0 or n_x >= width:
-                    continue
-                for n_y in range(y-1, y+2):
-                    if n_y < 0 or n_y >= height:
-                        continue
-                    self.to_update.add((n_x, n_y))
-        return len(cells_to_change)
+        for cell in cells_to_change:
+            self.array[cell] = not self.array[cell]
+            self.add_to_update(cell)
 
     def main(self, tps: int) -> None:
         spt = 1/tps
@@ -77,3 +96,9 @@ class Field:
             else:
                 time.sleep(time_to_sleep)
             
+if __name__ == '__main__':
+    f = Field(100, 32)
+    for _ in range(100):
+        f.life_step()
+    
+    print(f.life_step.__total_time__)
