@@ -1,15 +1,5 @@
-from typing import NamedTuple, overload, Tuple
 import functools
 import time
-import numpy as np
-
-# class Coord(np.ndarray):
-#     def __init__(self, x: int, y: int) -> None:
-#         self.x = int(x)
-#         self.y = int(y)
-    
-#     def __iter__(self):
-        # return iter((self.x, self.y))
 
 def timeit(f):
     @functools.wraps(f)
@@ -19,10 +9,13 @@ def timeit(f):
         elapsed = time.perf_counter() - start
 
         inner.__elapsed__ = elapsed
+        inner.__total_time__ += elapsed
+        inner.__n_runs__ += 1
 
         return ret
-
-
+    
+    inner.__total_time__ = 0
+    inner.__n_runs__ = 0
     inner.__elapsed__ = 0
     return inner
 
@@ -41,8 +34,3 @@ def not_so_fast(delay = 0.1):
         inner.__last_run__ = 0
         return inner
     return decorate
-
-if __name__ == '__main__':
-    pos = Coord(10, 20)
-    for c in pos:
-        print(c)

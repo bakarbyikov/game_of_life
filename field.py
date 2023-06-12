@@ -29,14 +29,12 @@ class Field:
         self.array[o_w-3:o_w, o_h-3:o_h] = life
 
 
-    @timeit
     def to_image(self, offset: Tuple[int, int], size: Tuple[int, int]) -> np.ndarray:
         o_x, o_y = offset
         s_x, s_y = size
         return self.array[o_x:o_x+s_x, o_y:o_y+s_y]
     
 
-    @timeit
     def __str__(self) -> None:
         symbols = {0: '_', 1: '#'}
         rows = list()
@@ -46,10 +44,14 @@ class Field:
         return '\n'.join(rows)+'\n'
     
 
-    def is_cell_need_change(self, cell: Cell) -> bool:
+    def count_neighbor(self, cell: Cell):
         x, y = cell
-        alive = self.array[x, y]
-        neighbor_count = self.array[x-1:x+2, y-1:y+2].sum() - alive 
+        return self.array[x-1:x+2, y-1:y+2].sum() - self.array[cell]
+
+    
+    def is_cell_need_change(self, cell: Cell) -> bool:
+        alive = self.array[cell]
+        neighbor_count = self.count_neighbor(cell)
         if alive:
             #dead condition
             changed = neighbor_count > 3 or neighbor_count < 2
@@ -59,14 +61,13 @@ class Field:
         
         return changed
     
-    
+
     def is_inbound(self, cell: Cell):
-        for component, top_bound in zip(cell, self.size):
-            if component >= top_bound:
-                return False
-            if component < 0:
-                return False
-        return True
+        w, h = self.size
+        if 0 <= cell.x < w:
+            if 0 <= cell.y < h:
+                return True
+        return False
 
 
     def add_to_update(self, cell: Cell):
@@ -76,7 +77,6 @@ class Field:
                 self.to_update.add(neighbor)
 
 
-    @timeit
     def life_step(self) -> None:
         cells_to_change = tuple(filter(self.is_cell_need_change, self.to_update))
         self.to_update.clear()
@@ -84,6 +84,7 @@ class Field:
         for cell in cells_to_change:
             self.array[cell] = not self.array[cell]
             self.add_to_update(cell)
+
 
     def main(self, tps: int) -> None:
         spt = 1/tps
@@ -98,7 +99,7 @@ class Field:
             
 if __name__ == '__main__':
     f = Field(100, 32)
+    funcs = [f.life_step]
     for _ in range(100):
+        print(f)
         f.life_step()
-    
-    print(f.life_step.__total_time__)

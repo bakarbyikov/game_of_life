@@ -38,7 +38,7 @@ class Field_windget:
         scale = min([i/j for i, j in zip(self.size, array_img.shape)])
         new_size = [i * scale for i in array_img.shape]
         resized = pg.transform.scale(surf, new_size)
-        return resized
+        return surf
 
 
 class Camera:
@@ -56,7 +56,7 @@ class Display():
         flags: int = 0,
     ) -> None:
         self.size = w, h = size
-        self.flags = 0#pg.RESIZABLE
+        self.flags = pg.SCALED#pg.RESIZABLE
         self.surface = pg.display.set_mode(self.size, self.flags)
         self.last_update = now()
         self.widgets = list()
@@ -126,7 +126,8 @@ class Game:
 
 
 class App:
-    window_size = 1920//2, 1080//2
+    # window_size = 1920//2, 1080//2
+    window_size = 100, 100
 
     class Exit(BaseException):
         pass
